@@ -42,6 +42,35 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
   res.status(201).json(sculpture);
 }));
 
+router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
+  const existing = await db.getOne(
+    "sculptures",
+    (s) => s.id === req.params.id && s.ownerUsername === req.auth.sub
+  );
+  if (!existing) return res.status(404).json({ error: "Not found (or not yours)" });
+
+  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions, photo } = req.body;
+  const patch = {};
+  if (name !== undefined) patch.name = String(name).slice(0, 80);
+  if (desc !== undefined) patch.desc = String(desc || "").slice(0, 400);
+  if (typeof lat === "number") patch.lat = lat;
+  if (typeof lon === "number") patch.lon = lon;
+  if (city !== undefined) patch.city = city || null;
+  if (state !== undefined) patch.state = state || null;
+  if (format !== undefined) patch.format = format;
+  if (color !== undefined) patch.color = color;
+  if (geomType !== undefined) patch.geomType = geomType;
+  if (stlPositions !== undefined) patch.stlPositions = Array.isArray(stlPositions) ? stlPositions : null;
+  if (photo !== undefined) patch.photo = typeof photo === "string" ? photo : null;
+
+  const updated = await db.update(
+    "sculptures",
+    (s) => s.id === req.params.id && s.ownerUsername === req.auth.sub,
+    patch
+  );
+  res.json(updated);
+}));
+
 router.delete("/:id", requireAuth, asyncHandler(async (req, res) => {
   const removed = await db.remove(
     "sculptures",
