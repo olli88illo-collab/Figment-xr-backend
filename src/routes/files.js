@@ -22,7 +22,7 @@ router.get("/", requireAuth, requireResident, requirePro, asyncHandler(async (re
 }));
 
 router.post("/", requireAuth, requireResident, requirePro, asyncHandler(async (req, res) => {
-  const { name, format, color, geomType, stlPositions } = req.body;
+  const { name, format, color, geomType, stlPositions, photo } = req.body;
   if (!name) return res.status(400).json({ error: "name is required." });
 
   const file = {
@@ -33,6 +33,7 @@ router.post("/", requireAuth, requireResident, requirePro, asyncHandler(async (r
     color: color || "#5FE1FF",
     geomType: geomType || "bloom",
     stlPositions: Array.isArray(stlPositions) ? stlPositions : null,
+    photo: typeof photo === "string" ? photo : null,
     createdAt: new Date().toISOString(),
   };
   await db.insert("files", file);

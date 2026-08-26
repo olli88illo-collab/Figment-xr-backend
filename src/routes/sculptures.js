@@ -18,7 +18,7 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     return res.status(403).json({ error: `Beta quota reached — ${INSTALL_QUOTA} sculptures max.` });
   }
 
-  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions } = req.body;
+  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions, photo } = req.body;
   if (!name || typeof lat !== "number" || typeof lon !== "number") {
     return res.status(400).json({ error: "name, lat, and lon are required." });
   }
@@ -35,6 +35,7 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     color: color || "#5FE1FF",
     geomType: geomType || "bloom",
     stlPositions: Array.isArray(stlPositions) ? stlPositions : null,
+    photo: typeof photo === "string" ? photo : null,
     createdAt: new Date().toISOString(),
   };
   await db.insert("sculptures", sculpture);
