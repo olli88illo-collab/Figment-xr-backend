@@ -18,7 +18,7 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     return res.status(403).json({ error: `Beta quota reached — ${INSTALL_QUOTA} sculptures max.` });
   }
 
-  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions, photo } = req.body;
+  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions, photo, heightM } = req.body;
   if (!name || typeof lat !== "number" || typeof lon !== "number") {
     return res.status(400).json({ error: "name, lat, and lon are required." });
   }
@@ -36,6 +36,7 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     geomType: geomType || "bloom",
     stlPositions: Array.isArray(stlPositions) ? stlPositions : null,
     photo: typeof photo === "string" ? photo : null,
+    heightM: (typeof heightM === "number" && heightM > 0) ? heightM : 2,
     createdAt: new Date().toISOString(),
   };
   await db.insert("sculptures", sculpture);
@@ -49,7 +50,7 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   );
   if (!existing) return res.status(404).json({ error: "Not found (or not yours)" });
 
-  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions, photo } = req.body;
+  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions, photo, heightM } = req.body;
   const patch = {};
   if (name !== undefined) patch.name = String(name).slice(0, 80);
   if (desc !== undefined) patch.desc = String(desc || "").slice(0, 400);
@@ -62,6 +63,7 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   if (geomType !== undefined) patch.geomType = geomType;
   if (stlPositions !== undefined) patch.stlPositions = Array.isArray(stlPositions) ? stlPositions : null;
   if (photo !== undefined) patch.photo = typeof photo === "string" ? photo : null;
+  if (typeof heightM === "number" && heightM > 0) patch.heightM = heightM;
 
   const updated = await db.update(
     "sculptures",
