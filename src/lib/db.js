@@ -38,6 +38,14 @@ function ready() {
           )
         `);
       }
+      // GLB only: remove any old STL geometry stored on sculptures and files (safe to run every start).
+      try {
+        await pool.query(`UPDATE sculptures SET data = (data - 'stlPositions') || '{"format":"glb"}'::jsonb WHERE data ? 'stlPositions' AND data->>'stlPositions' IS NOT NULL`);
+        await pool.query(`UPDATE sculptures SET data = data - 'stlPositions' WHERE data ? 'stlPositions'`);
+        await pool.query(`UPDATE files SET data = data - 'stlPositions' WHERE data ? 'stlPositions'`);
+      } catch (e) {
+        console.error("STL cleanup skipped:", e.message);
+      }
       // Fast "what is near me" lookups: an index on the sculptures' latitude / longitude.
       // Wrapped so a bad old row can never stop the server from starting.
       try {
