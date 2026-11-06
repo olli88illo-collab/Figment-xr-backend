@@ -128,3 +128,19 @@ risks losing any data — only adds a delay to the first request after idle.
 Android Studio and your real credentials) is the right tool for that next
 phase — it can iterate on the native wrapper and the billing integration
 with you step by step, the same way we've been iterating on this backend.
+
+## Location features (added Nov 2026)
+
+Sculptures already store a `lat` and `lon`, and any number of sculptures can share the same area.
+
+- `GET /api/sculptures/nearby?lat=..&lon=..&radius=300` — public. The sculptures within `radius` metres
+  (default 300, max 5000), closest first, each with `distanceM`. Light records: no geometry or photo.
+  Uses an index on latitude/longitude, created automatically when the server starts.
+- `GET /api/sculptures/:id` — public. One sculpture's full record.
+- `POST /api/sculptures/upload-url` — Residents only. Returns `{ uploadUrl, publicUrl }` for one `.glb` upload to
+  Cloudflare R2. The app PUTs the file to `uploadUrl`, then saves `publicUrl` as the sculpture's `glbUrl`.
+  Needs the `R2_*` values in `.env` (see `.env.example`); until then it answers 501.
+- `POST` / `PATCH /api/sculptures` now also accept `glbUrl` (https only), `rotationDeg` (turned from true north)
+  and `heightOffset` (metres) — the placement an artist saves on site.
+
+After pulling these changes run `npm install` (two new packages for file storage).

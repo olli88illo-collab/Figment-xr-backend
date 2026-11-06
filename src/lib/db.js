@@ -38,6 +38,16 @@ function ready() {
           )
         `);
       }
+      // Fast "what is near me" lookups: an index on the sculptures' latitude / longitude.
+      // Wrapped so a bad old row can never stop the server from starting.
+      try {
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS sculptures_geo_idx
+          ON sculptures (((data->>'lat')::float8), ((data->>'lon')::float8))
+        `);
+      } catch (e) {
+        console.warn("Could not create the sculptures geo index:", e.message);
+      }
     })();
   }
   return readyPromise;
@@ -80,4 +90,21 @@ async function remove(collection, filterFn) {
   return toRemove.length;
 }
 
-module.exports = { getAll, getOne, insert, update, remove };
+/**
+ * Sculptures inside a square around (lat, lon), found with the geo index (no full-table scan).
+ * Returns the whole records; the caller trims them and sorts by exact distance.
+ */
+async function nearbyBox(lat, lon, radiusM) {
+  await ready();
+  const dLat = radiusM / 111320;
+  const dLon = radiusM / (111320 * Math.max(0.01, Math.cos((lat * Math.PI) / 180)));
+  const res = await pool.query(
+    `SELECT data FROM sculptures
+     WHERE (data->>'lat')::float8 BETWEEN $1 AND $2
+       AND (data->>'lon')::float8 BETWEEN $3 AND $4`,
+    [lat - dLat, lat + dLat, lon - dLon, lon + dLon]
+  );
+  return res.rows.map((r) => r.data);
+}
+
+module.exports = { getAll, getOne, insert, update, remove, nearbyBox };
