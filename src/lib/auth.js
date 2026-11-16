@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const db = require("./db");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -27,16 +28,28 @@ function issueToken(user) {
 
 // Express middleware: requires a valid "Authorization: Bearer <token>"
 // header, and attaches the decoded { sub, role } to req.auth.
-function requireAuth(req, res, next) {
+// Also checks the account still exists: when an admin deletes a user, that user's
+// 30-day login token stops working right away instead of lingering.
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Missing auth token" });
+  let auth;
   try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
+    auth = jwt.verify(token, JWT_SECRET);
   } catch (e) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
+  try {
+    if (auth.role !== "admin") {
+      const user = await db.getOne("users", (u) => u.username === auth.sub);
+      if (!user) return res.status(401).json({ error: "This account no longer exists." });
+    }
+  } catch (e) {
+    return next(e);
+  }
+  req.auth = auth;
+  next();
 }
 
 function requireResident(req, res, next) {
