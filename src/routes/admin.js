@@ -105,7 +105,9 @@ router.get("/users", requireAdmin, asyncHandler(async (req, res) => {
   for (const s of sculptures) counts[s.ownerUsername] = (counts[s.ownerUsername] || 0) + 1;
   users.sort((a, b) => String(b.joined || "").localeCompare(String(a.joined || "")));
   res.json(users.map((u) => ({
-    username: u.username, role: u.role || "resident", isPro: !!u.isPro, bio: u.bio || "",
+    username: u.username, role: u.role || "resident", level: u.level || "artist", email: u.email || "",
+    orgName: u.orgName || "", website: u.website || "", paymentStatus: u.paymentStatus || "free",
+    isPro: !!u.isPro, bio: u.bio || "",
     avatar: typeof u.avatar === "string" ? u.avatar : null, joined: u.joined || null,
     installations: counts[u.username] || 0,
   })));
