@@ -13,12 +13,6 @@ router.get("/", asyncHandler(async (req, res) => {
 }));
 
 router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => {
-  // Patron and Collector accounts can explore and follow, but only Artist, Gallery, Museum and Business can install.
-  const me = await db.getOne("users", (u) => u.username === req.auth.sub);
-  const level = (me && me.level) || "artist";
-  if (!["artist", "gallery", "museum", "business"].includes(level)) {
-    return res.status(403).json({ error: "Your membership level can't install installations. Artist, Gallery, Museum and Business accounts can." });
-  }
   const mine = await db.getAll("sculptures", (s) => s.ownerUsername === req.auth.sub);
   if (mine.length >= INSTALL_QUOTA) {
     return res.status(403).json({ error: `Beta quota reached — ${INSTALL_QUOTA} sculptures max.` });
@@ -56,7 +50,7 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   );
   if (!existing) return res.status(404).json({ error: "Not found (or not yours)" });
 
-  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions, photo, heightM, forSale } = req.body;
+  const { name, desc, lat, lon, city, state, format, color, geomType, stlPositions, photo, heightM, forSale, touchRotate, autoRotate, autoRotateCw, autoRotateSpeed } = req.body;
   const patch = {};
   if (name !== undefined) patch.name = String(name).slice(0, 80);
   if (desc !== undefined) patch.desc = String(desc || "").slice(0, 400);
@@ -71,6 +65,11 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   if (photo !== undefined) patch.photo = typeof photo === "string" ? photo : null;
   if (typeof heightM === "number" && heightM > 0) patch.heightM = heightM;
   if (typeof forSale === "boolean") patch.forSale = forSale;   // the artist's "For sale" switch
+  // How viewers can turn it: by finger, and/or by itself (clockwise or not, degrees per second).
+  if (typeof touchRotate === "boolean") patch.touchRotate = touchRotate;
+  if (typeof autoRotate === "boolean") patch.autoRotate = autoRotate;
+  if (typeof autoRotateCw === "boolean") patch.autoRotateCw = autoRotateCw;
+  if (typeof autoRotateSpeed === "number" && isFinite(autoRotateSpeed)) patch.autoRotateSpeed = Math.min(90, Math.max(1, autoRotateSpeed));
 
   const updated = await db.update(
     "sculptures",
