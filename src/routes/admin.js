@@ -83,7 +83,7 @@ router.get("/sculptures", requireAdmin, asyncHandler(async (req, res) => {
   res.json(list.map((s) => ({
     id: s.id, name: s.name, desc: s.desc || "", owner: s.ownerUsername || "",
     city: s.city || "", state: s.state || "", lat: s.lat, lon: s.lon,
-    createdAt: s.createdAt || null, forSale: !!s.forSale, hasModel: !!(s.glbUrl || s.format === "glb"),
+    createdAt: s.createdAt || null, forSale: !!s.forSale, hasModel: !!(s.glbUrl || s.videoUrl || s.format === "glb"),
     photo: typeof s.photo === "string" ? s.photo : null,
   })));
 }));
@@ -93,6 +93,7 @@ router.delete("/sculptures/:id", requireAdmin, asyncHandler(async (req, res) => 
   if (!s) return res.status(404).json({ error: "Installation not found." });
   await db.remove("sculptures", (x) => x.id === req.params.id);
   await deleteModelFile(s.glbUrl);
+  await deleteModelFile(s.videoUrl);
   console.log(`[admin] ${req.admin} deleted installation "${s.name}" (${s.id}) by ${s.ownerUsername}`);
   res.status(204).end();
 }));
@@ -122,7 +123,7 @@ router.delete("/users/:username", requireAdmin, asyncHandler(async (req, res) =>
   await db.remove("sculptures", (s) => s.ownerUsername === username);
   await db.remove("files", (f) => f.ownerUsername === username);
   await db.remove("users", (x) => x.username === username);
-  for (const s of theirs) await deleteModelFile(s.glbUrl);
+  for (const s of theirs) { await deleteModelFile(s.glbUrl); await deleteModelFile(s.videoUrl); }
   console.log(`[admin] ${req.admin} deleted user "${username}" and ${theirs.length} installation(s)`);
   res.json({ deletedInstallations: theirs.length });
 }));
@@ -131,7 +132,7 @@ router.delete("/users/:username", requireAdmin, asyncHandler(async (req, res) =>
 async function deleteModelFile(url) {
   try {
     const base = (process.env.R2_PUBLIC_BASE_URL || "").replace(/\/$/, "");
-    if (!url || !base || !String(url).startsWith(base + "/glb/")) return;
+    if (!url || !base || !(String(url).startsWith(base + "/glb/") || String(url).startsWith(base + "/video/"))) return;
     if (!process.env.R2_ACCOUNT_ID || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY || !process.env.R2_BUCKET) return;
     const key = String(url).slice(base.length + 1);
     const { S3Client, DeleteObjectCommand } = require("@aws-sdk/client-s3");
