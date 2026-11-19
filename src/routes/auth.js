@@ -23,6 +23,8 @@ router.post("/signup", asyncHandler(async (req, res) => {
   const email = String(req.body.email || "").trim().toLowerCase();
   const orgName = String(req.body.orgName || "").trim().slice(0, 80);
   let website = String(req.body.website || "").trim().slice(0, 200);
+  // Optional first name: used only for the welcome greeting, never shown to other people.
+  const firstName = String(req.body.firstName || "").replace(/[<>]/g, "").trim().slice(0, 30);
 
   if (!LEVELS.includes(level)) {
     return res.status(400).json({ error: "Choose a membership level." });
@@ -59,6 +61,7 @@ router.post("/signup", asyncHandler(async (req, res) => {
     role: "resident",
     level,
     email,
+    firstName,
     orgName: ORG_LEVELS.includes(level) ? orgName : "",
     website: ORG_LEVELS.includes(level) ? website : "",
     // Nothing is charged for now: every level is free during the beta.

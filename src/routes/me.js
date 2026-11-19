@@ -15,6 +15,7 @@ router.get("/", requireAuth, asyncHandler(async (req, res) => {
 router.patch("/", requireAuth, asyncHandler(async (req, res) => {
   const patch = {};
   if (typeof req.body.bio === "string") patch.bio = req.body.bio.slice(0, 160);
+  if (typeof req.body.firstName === "string") patch.firstName = req.body.firstName.replace(/[<>]/g, "").trim().slice(0, 30);
   // Avatars arrive as a data URL from the client (same as the artifact's
   // canvas-resized upload) — a real deployment should instead upload to
   // object storage (S3, R2, etc.) and store a URL here, not the raw image.
