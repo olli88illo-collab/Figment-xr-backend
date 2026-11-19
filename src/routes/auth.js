@@ -27,6 +27,11 @@ router.post("/signup", asyncHandler(async (req, res) => {
   if (!LEVELS.includes(level)) {
     return res.status(400).json({ error: "Choose a membership level." });
   }
+  // Every Resident must accept the Terms and Conditions; the date and version are kept on the account.
+  if (req.body.acceptTerms !== true) {
+    return res.status(400).json({ error: "You must read and agree to the Terms and Conditions to register." });
+  }
+  const termsVersion = String(req.body.termsVersion || "").slice(0, 20);
   if (!USERNAME_RE.test(username)) {
     return res.status(400).json({ error: "Username must be 3-24 characters: lowercase letters, numbers, underscore, or period." });
   }
@@ -62,6 +67,8 @@ router.post("/signup", asyncHandler(async (req, res) => {
     bio: "",
     avatar: null,
     joined: new Date().toISOString(),
+    termsAcceptedAt: new Date().toISOString(),
+    termsVersion,
   };
   await db.insert("users", user);
 
