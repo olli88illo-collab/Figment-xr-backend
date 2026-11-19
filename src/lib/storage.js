@@ -48,4 +48,34 @@ async function createGlbUpload() {
   return { uploadUrl, publicUrl, key, contentType: "model/gltf-binary" };
 }
 
-module.exports = { configured, createGlbUpload };
+/**
+ * Same idea for an .mp4 video. The upload address is signed for exactly [size] bytes, so storage itself
+ * refuses anything bigger than the size the app declared (the route has already capped it at 50 MB).
+ */
+async function createVideoUpload(size) {
+  if (!configured()) {
+    const err = new Error("File storage is not set up yet (R2_* settings are missing).");
+    err.status = 501;
+    throw err;
+  }
+  const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+  const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+  const client = new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+  const key = `video/${crypto.randomUUID()}.mp4`;
+  const uploadUrl = await getSignedUrl(
+    client,
+    new PutObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key, ContentType: "video/mp4", ContentLength: size }),
+    { expiresIn: 600 }
+  );
+  const publicUrl = `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`;
+  return { uploadUrl, publicUrl, key, contentType: "video/mp4" };
+}
+
+module.exports = { configured, createGlbUpload, createVideoUpload };
