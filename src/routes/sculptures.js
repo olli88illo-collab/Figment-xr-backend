@@ -13,6 +13,10 @@ const isGlbUrl = (u) => typeof u === "string" && /^https:\/\/\S+\.glb(\?\S*)?$/i
 // Video installations: an https link to an .mp4 (our own storage hands these out).
 const isVideoUrl = (u) => typeof u === "string" && /^https:\/\/\S+\.mp4(\?\S*)?$/i.test(u);
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+// Sound for an installation: an https link to an .mp3 / .m4a / .aac (our own storage hands these out), at most 5 MB.
+const isAudioUrl = (u) => typeof u === "string" && /^https:\/\/\S+\.(mp3|m4a|aac)(\?\S*)?$/i.test(u);
+const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+const clampNum = (v, lo, hi, dflt) => (typeof v === "number" && Number.isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : dflt;
 // Only these membership levels may install work (Patrons and Collectors may not).
 const INSTALLER_LEVELS = ["artist", "gallery", "museum", "business"];
 
@@ -66,6 +70,21 @@ router.post("/video-upload-url", requireAuth, requireResident, asyncHandler(asyn
   }
 }));
 
+// A signed-in Resident asks for permission to upload one sound file (.mp3 / .m4a / .aac, at most 5 MB).
+router.post("/audio-upload-url", requireAuth, requireResident, asyncHandler(async (req, res) => {
+  const size = Number(req.body && req.body.size);
+  const ext = String((req.body && req.body.ext) || "").toLowerCase().replace(".", "");
+  if (!["mp3", "m4a", "aac"].includes(ext)) return res.status(400).json({ error: "Sound files must be .mp3, .m4a or .aac." });
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_AUDIO_BYTES) {
+    return res.status(400).json({ error: "Sound files can be at most 5 MB." });
+  }
+  try {
+    res.json(await storage.createAudioUpload(Math.floor(size), ext));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+}));
+
 // Public — one sculpture's full record .
 router.get("/:id", asyncHandler(async (req, res) => {
   const s = await db.getOne("sculptures", (x) => x.id === req.params.id);
@@ -85,7 +104,7 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     return res.status(403).json({ error: "Your membership level cannot install work. Artists, Galleries, Museums and Businesses can." });
   }
 
-  const { name, desc, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset, videoUrl, videoAspect, videoSound, videoFacesViewer } = req.body;
+  const { name, desc, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset, videoUrl, videoAspect, videoSound, videoFacesViewer, audioUrl, audioRadiusM, audioVolume } = req.body;
   if (!name || typeof lat !== "number" || typeof lon !== "number") {
     return res.status(400).json({ error: "name, lat, and lon are required." });
   }
@@ -94,6 +113,9 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
   }
   if (videoUrl !== undefined && videoUrl !== null && !isVideoUrl(videoUrl)) {
     return res.status(400).json({ error: "Only .mp4 video files are supported." });
+  }
+  if (audioUrl !== undefined && audioUrl !== null && !isAudioUrl(audioUrl)) {
+    return res.status(400).json({ error: "Sound files must be .mp3, .m4a or .aac." });
   }
   if (!isGlbUrl(glbUrl) && !isVideoUrl(videoUrl)) {
     return res.status(400).json({ error: "Upload a .glb model or an .mp4 video." });
@@ -121,6 +143,11 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     videoAspect: (typeof videoAspect === "number" && videoAspect > 0.2 && videoAspect < 5) ? videoAspect : 16 / 9,
     videoSound: videoSound === true,
     videoFacesViewer: videoFacesViewer !== false,
+    // Sound: plays more loudly the closer the viewer gets. On by default once the artist has attached a file.
+    audioUrl: isAudioUrl(audioUrl) ? audioUrl : null,
+    audioOn: isAudioUrl(audioUrl),
+    audioRadiusM: clampNum(audioRadiusM, 3, 50, 15),
+    audioVolume: clampNum(audioVolume, 0.1, 1, 0.8),
     createdAt: new Date().toISOString(),
   };
   await db.insert("sculptures", sculpture);
@@ -135,7 +162,7 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   if (!existing) return res.status(404).json({ error: "Not found (or not yours)" });
 
   const { name, desc, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset,
-    forSale, touchRotate, autoRotate, autoRotateCw, autoRotateSpeed, videoSound, videoFacesViewer } = req.body;
+    forSale, touchRotate, autoRotate, autoRotateCw, autoRotateSpeed, videoSound, videoFacesViewer, audioOn, audioRadiusM, audioVolume } = req.body;
   const patch = {};
   if (name !== undefined) patch.name = String(name).slice(0, 80);
   if (desc !== undefined) patch.desc = String(desc || "").slice(0, 400);
@@ -157,6 +184,9 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   if (typeof autoRotateSpeed === "number" && Number.isFinite(autoRotateSpeed)) patch.autoRotateSpeed = Math.min(90, Math.max(1, autoRotateSpeed));
   if (typeof videoSound === "boolean") patch.videoSound = videoSound;
   if (typeof videoFacesViewer === "boolean") patch.videoFacesViewer = videoFacesViewer;
+  if (typeof audioOn === "boolean") patch.audioOn = audioOn;
+  if (typeof audioRadiusM === "number") patch.audioRadiusM = clampNum(audioRadiusM, 3, 50, 15);
+  if (typeof audioVolume === "number") patch.audioVolume = clampNum(audioVolume, 0.1, 1, 0.8);
 
   const updated = await db.update(
     "sculptures",

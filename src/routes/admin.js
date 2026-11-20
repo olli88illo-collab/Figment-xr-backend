@@ -94,6 +94,7 @@ router.delete("/sculptures/:id", requireAdmin, asyncHandler(async (req, res) => 
   await db.remove("sculptures", (x) => x.id === req.params.id);
   await deleteModelFile(s.glbUrl);
   await deleteModelFile(s.videoUrl);
+  await deleteModelFile(s.audioUrl);
   console.log(`[admin] ${req.admin} deleted installation "${s.name}" (${s.id}) by ${s.ownerUsername}`);
   res.status(204).end();
 }));
@@ -123,7 +124,7 @@ router.delete("/users/:username", requireAdmin, asyncHandler(async (req, res) =>
   await db.remove("sculptures", (s) => s.ownerUsername === username);
   await db.remove("files", (f) => f.ownerUsername === username);
   await db.remove("users", (x) => x.username === username);
-  for (const s of theirs) { await deleteModelFile(s.glbUrl); await deleteModelFile(s.videoUrl); }
+  for (const s of theirs) { await deleteModelFile(s.glbUrl); await deleteModelFile(s.videoUrl); await deleteModelFile(s.audioUrl); }
   console.log(`[admin] ${req.admin} deleted user "${username}" and ${theirs.length} installation(s)`);
   res.json({ deletedInstallations: theirs.length });
 }));
@@ -132,7 +133,7 @@ router.delete("/users/:username", requireAdmin, asyncHandler(async (req, res) =>
 async function deleteModelFile(url) {
   try {
     const base = (process.env.R2_PUBLIC_BASE_URL || "").replace(/\/$/, "");
-    if (!url || !base || !(String(url).startsWith(base + "/glb/") || String(url).startsWith(base + "/video/"))) return;
+    if (!url || !base || !(String(url).startsWith(base + "/glb/") || String(url).startsWith(base + "/video/") || String(url).startsWith(base + "/audio/"))) return;
     if (!process.env.R2_ACCOUNT_ID || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY || !process.env.R2_BUCKET) return;
     const key = String(url).slice(base.length + 1);
     const { S3Client, DeleteObjectCommand } = require("@aws-sdk/client-s3");
