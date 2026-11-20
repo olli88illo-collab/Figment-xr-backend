@@ -16,9 +16,12 @@ const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 // Sound for an installation: an https link to an .mp3 / .m4a / .aac (our own storage hands these out), at most 5 MB.
 const isAudioUrl = (u) => typeof u === "string" && /^https:\/\/\S+\.(mp3|m4a|aac)(\?\S*)?$/i.test(u);
 const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+// Games: an https link to the developer's AR game (a web page, e.g. WebXR), or a single .html file we host for them (at most 25 MB).
+const isGameUrl = (u) => typeof u === "string" && u.length <= 500 && /^https:\/\/[^\s<>"']+$/i.test(u);
+const MAX_GAME_BYTES = 25 * 1024 * 1024;
 const clampNum = (v, lo, hi, dflt) => (typeof v === "number" && Number.isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : dflt;
 // Only these membership levels may install work (Patrons and Collectors may not).
-const INSTALLER_LEVELS = ["artist", "gallery", "museum", "business"];
+const INSTALLER_LEVELS = ["artist", "gallery", "museum", "business", "gamer"];
 
 // Public — anyone (including guests) can browse every installed sculpture.
 router.get("/", asyncHandler(async (req, res) => {
@@ -70,6 +73,21 @@ router.post("/video-upload-url", requireAuth, requireResident, asyncHandler(asyn
   }
 }));
 
+// A Gamer asks for permission to upload one single-file .html game (at most 25 MB); see lib/storage.js.
+router.post("/game-upload-url", requireAuth, requireResident, asyncHandler(async (req, res) => {
+  const me = await db.getOne("users", (u) => u.username === req.auth.sub);
+  if (!me || me.level !== "gamer") return res.status(403).json({ error: "Only Gamer accounts can upload games." });
+  const size = Number(req.body && req.body.size);
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_GAME_BYTES) {
+    return res.status(400).json({ error: "Game files can be at most 25 MB." });
+  }
+  try {
+    res.json(await storage.createGameUpload(Math.floor(size)));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+}));
+
 // A signed-in Resident asks for permission to upload one sound file (.mp3 / .m4a / .aac, at most 5 MB).
 router.post("/audio-upload-url", requireAuth, requireResident, asyncHandler(async (req, res) => {
   const size = Number(req.body && req.body.size);
@@ -104,7 +122,7 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     return res.status(403).json({ error: "Your membership level cannot install work. Artists, Galleries, Museums and Businesses can." });
   }
 
-  const { name, desc, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset, videoUrl, videoAspect, videoSound, videoFacesViewer, audioUrl, audioRadiusM, audioVolume } = req.body;
+  const { name, desc, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset, videoUrl, videoAspect, videoSound, videoFacesViewer, audioUrl, audioRadiusM, audioVolume, gameUrl, gameRadiusM } = req.body;
   if (!name || typeof lat !== "number" || typeof lon !== "number") {
     return res.status(400).json({ error: "name, lat, and lon are required." });
   }
@@ -117,8 +135,14 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
   if (audioUrl !== undefined && audioUrl !== null && !isAudioUrl(audioUrl)) {
     return res.status(400).json({ error: "Sound files must be .mp3, .m4a or .aac." });
   }
-  if (!isGlbUrl(glbUrl) && !isVideoUrl(videoUrl)) {
-    return res.status(400).json({ error: "Upload a .glb model or an .mp4 video." });
+  if (gameUrl !== undefined && gameUrl !== null && !isGameUrl(gameUrl)) {
+    return res.status(400).json({ error: "The game link must start with https://" });
+  }
+  if (gameUrl && level !== "gamer") {
+    return res.status(403).json({ error: "Only Gamer accounts can install games." });
+  }
+  if (!isGlbUrl(glbUrl) && !isVideoUrl(videoUrl) && !isGameUrl(gameUrl)) {
+    return res.status(400).json({ error: "Upload a .glb model, an .mp4 video or a game." });
   }
 
   const sculpture = {
@@ -129,7 +153,7 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     lat, lon,
     city: city || null,
     state: state || null,
-    format: isVideoUrl(videoUrl) ? "video" : "glb",
+    format: isGameUrl(gameUrl) && !isGlbUrl(glbUrl) && !isVideoUrl(videoUrl) ? "game" : isVideoUrl(videoUrl) ? "video" : "glb",
     color: color || "#5FE1FF",
     geomType: geomType || "bloom",
     photo: typeof photo === "string" ? photo : null,
@@ -148,6 +172,9 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     audioOn: isAudioUrl(audioUrl),
     audioRadiusM: clampNum(audioRadiusM, 3, 50, 15),
     audioVolume: clampNum(audioVolume, 0.1, 1, 0.8),
+    // Games: players must be within gameRadiusM metres to start it.
+    gameUrl: isGameUrl(gameUrl) ? gameUrl : null,
+    gameRadiusM: clampNum(gameRadiusM, 5, 200, 30),
     createdAt: new Date().toISOString(),
   };
   await db.insert("sculptures", sculpture);
@@ -162,7 +189,7 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   if (!existing) return res.status(404).json({ error: "Not found (or not yours)" });
 
   const { name, desc, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset,
-    forSale, touchRotate, autoRotate, autoRotateCw, autoRotateSpeed, videoSound, videoFacesViewer, audioOn, audioRadiusM, audioVolume } = req.body;
+    forSale, touchRotate, autoRotate, autoRotateCw, autoRotateSpeed, videoSound, videoFacesViewer, audioOn, audioRadiusM, audioVolume, gameRadiusM } = req.body;
   const patch = {};
   if (name !== undefined) patch.name = String(name).slice(0, 80);
   if (desc !== undefined) patch.desc = String(desc || "").slice(0, 400);
@@ -187,6 +214,7 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   if (typeof audioOn === "boolean") patch.audioOn = audioOn;
   if (typeof audioRadiusM === "number") patch.audioRadiusM = clampNum(audioRadiusM, 3, 50, 15);
   if (typeof audioVolume === "number") patch.audioVolume = clampNum(audioVolume, 0.1, 1, 0.8);
+  if (typeof gameRadiusM === "number") patch.gameRadiusM = clampNum(gameRadiusM, 5, 200, 30);
 
   const updated = await db.update(
     "sculptures",

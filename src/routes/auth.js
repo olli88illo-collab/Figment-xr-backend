@@ -11,8 +11,8 @@ const USERNAME_RE = /^[a-z0-9_.]{3,24}$/;
 // as the client already does. This endpoint doesn't accept a "visitor"
 // role signup at all, so the database only ever gains Resident accounts.
 // The six Resident levels. Patron and Collector can look around, follow and talk to artists;
-// Artist, Gallery, Museum and Business can also install installations.
-const LEVELS = ["patron", "collector", "artist", "gallery", "museum", "business"];
+// Artist, Gallery, Museum, Business and Gamer can also install installations.
+const LEVELS = ["patron", "collector", "artist", "gallery", "museum", "business", "gamer"];
 const ORG_LEVELS = ["gallery", "museum", "business"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
