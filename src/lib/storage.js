@@ -78,4 +78,32 @@ async function createVideoUpload(size) {
   return { uploadUrl, publicUrl, key, contentType: "video/mp4" };
 }
 
-module.exports = { configured, createGlbUpload, createVideoUpload };
+/** Same idea for a sound file (.mp3 / .m4a / .aac, at most 5 MB; the address is signed for exactly [size] bytes). */
+async function createAudioUpload(size, ext) {
+  if (!configured()) {
+    const err = new Error("File storage is not set up yet (R2_* settings are missing).");
+    err.status = 501;
+    throw err;
+  }
+  const type = ext === "mp3" ? "audio/mpeg" : ext === "aac" ? "audio/aac" : "audio/mp4";
+  const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+  const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+  const client = new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+  const key = `audio/${crypto.randomUUID()}.${ext}`;
+  const uploadUrl = await getSignedUrl(
+    client,
+    new PutObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key, ContentType: type, ContentLength: size }),
+    { expiresIn: 600 }
+  );
+  const publicUrl = `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`;
+  return { uploadUrl, publicUrl, key, contentType: type };
+}
+
+module.exports = { configured, createGlbUpload, createVideoUpload, createAudioUpload };
