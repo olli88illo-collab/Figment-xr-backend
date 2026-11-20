@@ -106,4 +106,31 @@ async function createAudioUpload(size, ext) {
   return { uploadUrl, publicUrl, key, contentType: type };
 }
 
-module.exports = { configured, createGlbUpload, createVideoUpload, createAudioUpload };
+/** A single-file .html game (at most 25 MB). Stored as a web page so the player's browser can open it. */
+async function createGameUpload(size) {
+  if (!configured()) {
+    const err = new Error("File storage is not set up yet (R2_* settings are missing).");
+    err.status = 501;
+    throw err;
+  }
+  const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+  const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+  const client = new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+  const key = `game/${crypto.randomUUID()}.html`;
+  const uploadUrl = await getSignedUrl(
+    client,
+    new PutObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key, ContentType: "text/html; charset=utf-8", ContentLength: size }),
+    { expiresIn: 600 }
+  );
+  const publicUrl = `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`;
+  return { uploadUrl, publicUrl, key, contentType: "text/html; charset=utf-8" };
+}
+
+module.exports = { configured, createGlbUpload, createVideoUpload, createAudioUpload, createGameUpload };
