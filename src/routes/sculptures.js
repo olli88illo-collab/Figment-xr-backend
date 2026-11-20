@@ -21,7 +21,7 @@ const isGameUrl = (u) => typeof u === "string" && u.length <= 500 && /^https:\/\
 const MAX_GAME_BYTES = 25 * 1024 * 1024;
 const clampNum = (v, lo, hi, dflt) => (typeof v === "number" && Number.isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : dflt;
 // Only these membership levels may install work (Patrons and Collectors may not).
-const INSTALLER_LEVELS = ["artist", "gallery", "museum", "business", "gamer"];
+const INSTALLER_LEVELS = ["artist", "gallery", "museum", "business", "gamer", "architect"];
 
 // Public — anyone (including guests) can browse every installed sculpture.
 router.get("/", asyncHandler(async (req, res) => {
