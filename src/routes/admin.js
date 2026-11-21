@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const db = require("../lib/db");
 const asyncHandler = require("../lib/asyncHandler");
+const reports = require("../lib/reports");
 
 const router = express.Router();
 
@@ -97,6 +98,18 @@ router.delete("/sculptures/:id", requireAdmin, asyncHandler(async (req, res) => 
   await deleteModelFile(s.audioUrl);
   await deleteModelFile(s.gameUrl);
   console.log(`[admin] ${req.admin} deleted installation "${s.name}" (${s.id}) by ${s.ownerUsername}`);
+  res.status(204).end();
+}));
+
+// ---- reports from the app ("Report this installation") ----
+router.get("/reports", requireAdmin, asyncHandler(async (req, res) => {
+  res.json(await reports.list());
+}));
+
+router.delete("/reports/:id", requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Bad report id." });
+  await reports.remove(id);
   res.status(204).end();
 }));
 
