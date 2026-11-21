@@ -3,6 +3,7 @@ const db = require("../lib/db");
 const { hashPassword, verifyPassword, issueToken } = require("../lib/auth");
 const asyncHandler = require("../lib/asyncHandler");
 const reports = require("../lib/reports");
+const ratings = require("../lib/ratings");
 
 const router = express.Router();
 
@@ -217,6 +218,45 @@ router.post("/report", asyncHandler(async (req, res) => {
   }
   console.log(`[report] ${reporter} reported "${s.name}" (${sculptureId}): ${reason}`);
   res.json({ ok: true });
+}));
+
+// ---- Rate an installation (1 to 5 stars). One rating per person; rating again replaces the earlier one. ----
+const rateHits = new Map();
+
+router.post("/rate", asyncHandler(async (req, res) => {
+  const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+  const now = Date.now();
+  const recent = (rateHits.get(ip) || []).filter(ts => now - ts < 60 * 60 * 1000);
+  if (recent.length >= 60) return res.status(429).json({ error: "Too many ratings just now. Please try again later." });
+
+  const sculptureId = String(req.body.sculptureId || "").slice(0, 100);
+  const stars = parseInt(req.body.stars, 10);
+  if (!sculptureId) return res.status(400).json({ error: "Which installation? Please try again." });
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) return res.status(400).json({ error: "Choose 1 to 5 stars." });
+
+  const s = await db.getOne("sculptures", (x) => x.id === sculptureId);
+  if (!s) return res.status(404).json({ error: "That installation no longer exists." });
+
+  let rater = null;
+  let username = null;
+  try {
+    const h = req.headers.authorization || "";
+    if (h.startsWith("Bearer ")) {
+      const p = require("jsonwebtoken").verify(h.slice(7), process.env.JWT_SECRET);
+      if (p && p.sub) { username = String(p.sub); rater = "u:" + username.toLowerCase(); }
+    }
+  } catch (e) { /* not signed in: use the device id */ }
+  if (!rater) {
+    const dev = String(req.body.deviceId || "");
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(dev)) return res.status(400).json({ error: "Couldn’t identify this phone. Please try again." });
+    rater = "d:" + dev;
+  }
+  if (username && String(s.ownerUsername || "").toLowerCase() === username.toLowerCase()) {
+    return res.status(403).json({ error: "You can’t rate your own installation." });
+  }
+  const sum = await ratings.rate(sculptureId, rater, stars);
+  recent.push(now); rateHits.set(ip, recent);
+  res.json({ ratingAvg: sum.avg, ratingCount: sum.count });
 }));
 
 module.exports = router;

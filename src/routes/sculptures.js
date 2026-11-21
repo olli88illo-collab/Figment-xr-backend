@@ -5,6 +5,7 @@ const { requireAuth, requireResident } = require("../lib/auth");
 const asyncHandler = require("../lib/asyncHandler");
 const { distanceM } = require("../lib/geo");
 const storage = require("../lib/storage");
+const ratings = require("../lib/ratings");
 
 const router = express.Router();
 const INSTALL_QUOTA = 3;
@@ -25,7 +26,7 @@ const INSTALLER_LEVELS = ["artist", "gallery", "museum", "business", "gamer", "a
 
 // Public — anyone (including guests) can browse every installed sculpture.
 router.get("/", asyncHandler(async (req, res) => {
-  res.json(await db.getAll("sculptures"));
+  res.json(await ratings.attach(await db.getAll("sculptures")));
 }));
 
 // Public — the sculptures near a spot, closest first. This is what the app calls when you arrive somewhere.
@@ -48,7 +49,7 @@ router.get("/nearby", asyncHandler(async (req, res) => {
     out.push({ ...light, hasGlb: !!light.glbUrl, distanceM: Math.round(d) });
   }
   out.sort((a, b) => a.distanceM - b.distanceM);
-  res.json(out);
+  res.json(await ratings.attach(out));
 }));
 
 // A signed-in Resident asks for permission to upload one .glb file; see lib/storage.js.
@@ -107,7 +108,7 @@ router.post("/audio-upload-url", requireAuth, requireResident, asyncHandler(asyn
 router.get("/:id", asyncHandler(async (req, res) => {
   const s = await db.getOne("sculptures", (x) => x.id === req.params.id);
   if (!s) return res.status(404).json({ error: "Not found" });
-  res.json(s);
+  res.json((await ratings.attach([s]))[0]);
 }));
 
 router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => {
