@@ -4,6 +4,7 @@ const { hashPassword, verifyPassword, issueToken } = require("../lib/auth");
 const asyncHandler = require("../lib/asyncHandler");
 const reports = require("../lib/reports");
 const ratings = require("../lib/ratings");
+const downloads = require("../lib/downloads");
 
 const router = express.Router();
 
@@ -257,6 +258,37 @@ router.post("/rate", asyncHandler(async (req, res) => {
   const sum = await ratings.rate(sculptureId, rater, stars);
   recent.push(now); rateHits.set(ip, recent);
   res.json({ ratingAvg: sum.avg, ratingCount: sum.count });
+}));
+
+// ---- Count a download: one per person per installation (Resident by username, Visitor by anonymous device id) ----
+const dlHits = new Map();
+
+router.post("/download", asyncHandler(async (req, res) => {
+  const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+  const now = Date.now();
+  const recent = (dlHits.get(ip) || []).filter(ts => now - ts < 60 * 60 * 1000);
+  if (recent.length >= 300) return res.status(429).json({ error: "Too many requests just now." });
+  const sculptureId = String(req.body.sculptureId || "").slice(0, 100);
+  if (!sculptureId) return res.status(400).json({ error: "Which installation?" });
+  const s = await db.getOne("sculptures", (x) => x.id === sculptureId);
+  if (!s) return res.status(404).json({ error: "That installation no longer exists." });
+  let who = null, username = null;
+  try {
+    const h = req.headers.authorization || "";
+    if (h.startsWith("Bearer ")) {
+      const p = require("jsonwebtoken").verify(h.slice(7), process.env.JWT_SECRET);
+      if (p && p.sub) { username = String(p.sub); who = "u:" + username.toLowerCase(); }
+    }
+  } catch (e) { /* not signed in: use the device id */ }
+  if (!who) {
+    const dev = String(req.body.deviceId || "");
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(dev)) return res.status(400).json({ error: "Couldn’t identify this phone." });
+    who = "d:" + dev;
+  }
+  recent.push(now); dlHits.set(ip, recent);
+  if (username && String(s.ownerUsername || "").toLowerCase() === username.toLowerCase()) return res.json({ downloadCount: 0, counted: false });
+  const n = await downloads.record(sculptureId, who);
+  res.json({ downloadCount: n, counted: true });
 }));
 
 module.exports = router;
