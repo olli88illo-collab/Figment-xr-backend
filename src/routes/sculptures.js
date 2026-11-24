@@ -223,6 +223,14 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
 
   // A moving installation: it travels between its own spot (lat, lon) and an end spot (pathLat, pathLon), taking pathSeconds for one way, then back.
   // Send pathLat: null to make it stand still again.
+  // For a moving installation the app works with the MIDDLE of its path (Explore, the info bubble, the map pin, placement range). When the app sends
+  // a new spot (lat, lon) for it, that is the new middle: move the start and the end by the same amount.
+  if (existing.pathLat != null && existing.pathLon != null && typeof req.body.lat === "number" && typeof req.body.lon === "number" && req.body.pathLat === undefined) {
+    const dLat = req.body.lat - (existing.lat + existing.pathLat) / 2;
+    const dLon = req.body.lon - (existing.lon + existing.pathLon) / 2;
+    patch.lat = existing.lat + dLat; patch.lon = existing.lon + dLon;
+    patch.pathLat = existing.pathLat + dLat; patch.pathLon = existing.pathLon + dLon;
+  }
   if (req.body.pathLat === null || req.body.pathLon === null) {
     patch.pathLat = null; patch.pathLon = null; patch.pathSeconds = null;
   } else if (typeof req.body.pathLat === "number" && typeof req.body.pathLon === "number") {
