@@ -124,7 +124,7 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     return res.status(403).json({ error: "Your membership level cannot install work. Artists, Galleries, Museums and Businesses can." });
   }
 
-  const { name, desc, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset, videoUrl, videoAspect, videoSound, videoFacesViewer, audioUrl, audioRadiusM, audioVolume, gameUrl, gameRadiusM } = req.body;
+  const { name, desc, kind, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset, videoUrl, videoAspect, videoSound, videoFacesViewer, audioUrl, audioRadiusM, audioVolume, gameUrl, gameRadiusM } = req.body;
   if (!name || typeof lat !== "number" || typeof lon !== "number") {
     return res.status(400).json({ error: "name, lat, and lon are required." });
   }
@@ -152,6 +152,8 @@ router.post("/", requireAuth, requireResident, asyncHandler(async (req, res) => 
     ownerUsername: req.auth.sub,
     name: String(name).slice(0, 80),
     desc: String(desc || "").slice(0, 400),
+    // What kind of installation it is, in the installer's own words (for example "Art installation", "Architecture", "Game", "Promo").
+    kind: String(kind || "").trim().slice(0, 30),
     lat, lon,
     city: city || null,
     state: state || null,
@@ -190,11 +192,12 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   );
   if (!existing) return res.status(404).json({ error: "Not found (or not yours)" });
 
-  const { name, desc, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset,
+  const { name, desc, kind, lat, lon, city, state, format, color, geomType, photo, heightM, glbUrl, rotationDeg, heightOffset,
     forSale, touchRotate, autoRotate, autoRotateCw, autoRotateSpeed, videoSound, videoFacesViewer, audioOn, audioRadiusM, audioVolume, gameRadiusM } = req.body;
   const patch = {};
   if (name !== undefined) patch.name = String(name).slice(0, 80);
   if (desc !== undefined) patch.desc = String(desc || "").slice(0, 400);
+  if (kind !== undefined) patch.kind = String(kind || "").trim().slice(0, 30);
   if (typeof lat === "number") patch.lat = lat;
   if (typeof lon === "number") patch.lon = lon;
   if (city !== undefined) patch.city = city || null;
