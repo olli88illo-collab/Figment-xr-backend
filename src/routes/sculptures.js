@@ -221,6 +221,21 @@ router.patch("/:id", requireAuth, asyncHandler(async (req, res) => {
   if (typeof audioVolume === "number") patch.audioVolume = clampNum(audioVolume, 0.1, 1, 0.8);
   if (typeof gameRadiusM === "number") patch.gameRadiusM = clampNum(gameRadiusM, 5, 200, 30);
 
+  // A moving installation: it travels between its own spot (lat, lon) and an end spot (pathLat, pathLon), taking pathSeconds for one way, then back.
+  // Send pathLat: null to make it stand still again.
+  if (req.body.pathLat === null || req.body.pathLon === null) {
+    patch.pathLat = null; patch.pathLon = null; patch.pathSeconds = null;
+  } else if (typeof req.body.pathLat === "number" && typeof req.body.pathLon === "number") {
+    const baseLat = typeof patch.lat === "number" ? patch.lat : existing.lat;
+    const baseLon = typeof patch.lon === "number" ? patch.lon : existing.lon;
+    if (Math.abs(req.body.pathLat) > 90 || Math.abs(req.body.pathLon) > 180) return res.status(400).json({ error: "Bad end spot." });
+    if (distanceM(baseLat, baseLon, req.body.pathLat, req.body.pathLon) > 1000) return res.status(400).json({ error: "The end spot must be within 1 km of the installation." });
+    patch.pathLat = req.body.pathLat; patch.pathLon = req.body.pathLon;
+    patch.pathSeconds = clampNum(req.body.pathSeconds, 10, 3600, 120);
+  } else if (typeof req.body.pathSeconds === "number" && existing.pathLat != null) {
+    patch.pathSeconds = clampNum(req.body.pathSeconds, 10, 3600, 120);
+  }
+
   const updated = await db.update(
     "sculptures",
     (s) => s.id === req.params.id && s.ownerUsername === req.auth.sub,
