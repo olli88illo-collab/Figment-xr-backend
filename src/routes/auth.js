@@ -121,6 +121,7 @@ router.post("/contact", asyncHandler(async (req, res) => {
   if (!EMAIL_RE.test(replyTo)) return res.status(400).json({ error: "Please enter your email address so we can reply." });
   if (!message) return res.status(400).json({ error: "Please write a message first." });
 
+  const device = String(req.body.device || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200);   // app version, phone model, Android version (sent by the app)
   // Signed-in Residents: include their username (the token is optional)
   let who = "Visitor (not signed in)";
   try {
@@ -155,7 +156,7 @@ router.post("/contact", asyncHandler(async (req, res) => {
     headers: { "Authorization": "Bearer " + apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({
       from, to: [to], reply_to: replyTo, subject: "[FigmentXR app] " + subject,
-      text: message + "\n\n—\nFrom: " + replyTo + "\n" + who + "\nSent from the FigmentXR app",
+      text: message + "\n\n—\nFrom: " + replyTo + "\n" + who + (device ? "\nDevice: " + device : "") + "\nSent from the FigmentXR app",
       attachments,
     }),
   });
